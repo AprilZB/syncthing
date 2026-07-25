@@ -80,11 +80,12 @@ type quicDialResult struct {
 }
 
 func (d *quicDialer) dialWithFreshTransport(ctx context.Context, addr *net.UDPAddr) (internalConn, error) {
-	packetConn, err := net.ListenPacket("udp", ":0")
+	packetConn, err := net.ListenUDP("udp", nil)
 	if err != nil {
 		return internalConn{}, err
 	}
-	return d.dial(ctx, &quic.Transport{Conn: packetConn}, packetConn, addr)
+	boundedConn := newQUICUDPConn(packetConn)
+	return d.dial(ctx, &quic.Transport{Conn: boundedConn}, boundedConn, addr)
 }
 
 func (d *quicDialer) dial(ctx context.Context, transport *quic.Transport, createdConn net.PacketConn, addr *net.UDPAddr) (internalConn, error) {
