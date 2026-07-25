@@ -98,20 +98,24 @@ func newQUICUDPConn(conn *net.UDPConn) *quicUDPConn {
 
 func (c *quicUDPConn) WriteTo(p []byte, addr net.Addr) (int, error) {
 	c.writeMut.Lock()
-	defer c.writeMut.Unlock()
 
 	_ = c.UDPConn.SetWriteDeadline(time.Now().Add(c.timeout))
-	defer c.UDPConn.SetWriteDeadline(time.Time{})
+	defer func() {
+		_ = c.UDPConn.SetWriteDeadline(time.Time{})
+		c.writeMut.Unlock()
+	}()
 
 	return c.UDPConn.WriteTo(p, addr)
 }
 
 func (c *quicUDPConn) WriteMsgUDP(p, oob []byte, addr *net.UDPAddr) (int, int, error) {
 	c.writeMut.Lock()
-	defer c.writeMut.Unlock()
 
 	_ = c.UDPConn.SetWriteDeadline(time.Now().Add(c.timeout))
-	defer c.UDPConn.SetWriteDeadline(time.Time{})
+	defer func() {
+		_ = c.UDPConn.SetWriteDeadline(time.Time{})
+		c.writeMut.Unlock()
+	}()
 
 	return c.UDPConn.WriteMsgUDP(p, oob, addr)
 }
