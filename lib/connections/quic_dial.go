@@ -74,11 +74,6 @@ func (d *quicDialer) Dial(ctx context.Context, _ protocol.DeviceID, uri *url.URL
 	return d.dialWithFreshTransport(ctx, addr)
 }
 
-type quicDialResult struct {
-	conn internalConn
-	err  error
-}
-
 func (d *quicDialer) dialWithFreshTransport(ctx context.Context, addr *net.UDPAddr) (internalConn, error) {
 	packetConn, err := net.ListenUDP("udp", nil)
 	if err != nil {
@@ -92,28 +87,7 @@ func (d *quicDialer) dial(ctx context.Context, transport *quic.Transport, create
 	ctx, cancel := context.WithTimeout(ctx, quicOperationTimeout)
 	defer cancel()
 
-	res := make(chan quicDialResult)
-	go func() {
-		conn, err := d.dialAndOpenStream(ctx, transport, createdConn, addr)
-		result := quicDialResult{conn: conn, err: err}
-		select {
-		case res <- result:
-		case <-ctx.Done():
-			if err == nil {
-				_ = conn.Close()
-			}
-		}
-	}()
-
-	select {
-	case result := <-res:
-		return result.conn, result.err
-	case <-ctx.Done():
-		if createdConn != nil {
-			_ = createdConn.Close()
-		}
-		return internalConn{}, ctx.Err()
-	}
+	return d.dialAndOpenStream(ctx, transport, createdConn, addr)
 }
 
 func (d *quicDialer) dialAndOpenStream(ctx context.Context, transport *quic.Transport, createdConn net.PacketConn, addr *net.UDPAddr) (internalConn, error) {
@@ -127,9 +101,9 @@ func (d *quicDialer) dialAndOpenStream(ctx context.Context, transport *quic.Tran
 
 	stream, err := session.OpenStreamSync(ctx)
 	if err != nil {
-		// Close asynchronously: quic-go waits for connection teardown here,
-		// and a wedged teardown must not block the dial result.
-		go session.CloseWithError(1, err.Error())
+		// UDP writes are bounded at the socket, so quic-go teardown should
+		// return instead of wedging the dial round.
+		_ = session.CloseWithError(1, err.Error())
 		if createdConn != nil {
 			_ = createdConn.Close()
 		}
