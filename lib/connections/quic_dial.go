@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -123,11 +122,19 @@ func isQUICDialTimeout(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
+
+	var idleTimeoutErr *quic.IdleTimeoutError
+	if errors.As(err, &idleTimeoutErr) {
 		return true
 	}
-	return strings.Contains(err.Error(), "no recent network activity")
+
+	var handshakeTimeoutErr *quic.HandshakeTimeoutError
+	if errors.As(err, &handshakeTimeoutErr) {
+		return true
+	}
+
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 type quicDialerFactory struct{}
